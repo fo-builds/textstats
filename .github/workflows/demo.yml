@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths-ignore: ['.github/**']
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -25,40 +25,17 @@ jobs:
       - name: Install RepoPilot from its public repo
         run: pip install -q git+https://github.com/fo-builds/repopilot.git pytest
 
-      - name: Pick a Nemotron model from the GitHub Models catalog
-        id: pick
+      - name: Run RepoPilot end to end on issue #1 (offline plan mode)
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          curl -s -H "Authorization: Bearer $GH_TOKEN" https://models.github.ai/catalog -o catalog.json
-          NEMO=$(python3 - <<'PY'
-          import json
-          try:
-              d = json.load(open('catalog.json'))
-          except Exception:
-              d = []
-          ids = [m.get('id') or m.get('name','') for m in d if isinstance(m, dict)]
-          print(len(ids), 'models in catalog')
-          nem = [i for i in ids if 'nemotron' in i.lower()]
-          print('nemotron models:', nem)
-          print(nem[0] if nem else 'openai/gpt-4.1-mini')
-          PY
-          )
-          echo "model line: $NEMO"
-          MODEL=$(echo "$NEMO" | tail -1)
-          echo "model=$MODEL" >> "$GITHUB_OUTPUT"
-
-      - name: Run RepoPilot end to end on issue #1
-        env:
-          REPOPILOT_PROVIDER: github_models
-          GITHUB_MODELS_MODEL: ${{ steps.pick.outputs.model }}
+          REPOPILOT_PROVIDER: nebius
+          REPOPILOT_PLAN_FILE: plan.json
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python -m repopilot https://github.com/fo-builds/textstats 1 --no-call
           echo '--- result card ---'
           cat out/result_card.json
 
-      - name: Show the opened PR
+      - name: List opened PRs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh pr list --repo fo-builds/textstats --state all --limit 5 || true
